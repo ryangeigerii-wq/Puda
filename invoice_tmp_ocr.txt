@@ -1,0 +1,4 @@
+Invoice Number: INV-5555
+Total: $456.78
+2025-11-08
+Thank you for your business

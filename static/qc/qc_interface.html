@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QC Verification Interface</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+        }
+
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            grid-template-rows: 60px 1fr 80px;
+            height: 100vh;
+            gap: 0;
+        }
+
+        /* Header */
+        .header {
+            grid-column: 1 / -1;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            font-size: 24px;
+            font-weight: 600;
+        }
+
+        .operator-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .operator-badge {
+            background: rgba(255,255,255,0.2);
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        /* Image Viewer */
+        .image-viewer {
+            grid-row: 2;
+            background: #2a2a2a;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #documentCanvas {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            cursor: grab;
+        }
+
+        #documentCanvas:active {
+            cursor: grabbing;
+        }
+
+        .overlay-text {
+            position: absolute;
+            background: rgba(255, 255, 0, 0.3);
+            border: 1px solid #ff0;
+            padding: 2px;
+            font-size: 12px;
+            color: #000;
+            font-family: monospace;
+            cursor: text;
+            user-select: text;
+        }
+
+        .overlay-text.editable {
+            background: rgba(0, 255, 0, 0.3);
+            border-color: #0f0;
+        }
+
+        .overlay-text.incorrect {
+            background: rgba(255, 0, 0, 0.3);
+            border-color: #f00;
+        }
+
+        /* Controls */
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.9);
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .control-btn:hover {
+            background: white;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        /* Sidebar */
+        .sidebar {
+            grid-row: 2;
+            background: white;
+            border-left: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .sidebar-section {
+            padding: 20px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .sidebar-section h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+
+        .task-info {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .info-label {
+            color: #666;
+            font-weight: 500;
+        }
+
+        .info-value {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .confidence-bar {
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 5px;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #f44336, #ff9800, #4caf50);
+            transition: width 0.3s;
+        }
+
+        /* Field Editor */
+        .field-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .field-item {
+            background: #f9f9f9;
+            padding: 12px;
+            border-radius: 5px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .field-item.modified {
+            border-color: #4caf50;
+            background: #f1f8f4;
+        }
+
+        .field-name {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .field-input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 3px;
+            font-size: 14px;
+            font-family: inherit;
+        }
+
+        .field-input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .field-confidence {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 5px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .field-confidence input[type="range"] {
+            flex: 1;
+        }
+
+        /* Issue Categories */
+        .issue-categories {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .issue-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .issue-checkbox input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+        }
+
+        /* Notes */
+        .notes-textarea {
+            width: 100%;
+            min-height: 80px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+        }
+
+        .notes-textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        /* Action Bar */
+        .action-bar {
+            grid-column: 1 / -1;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        .btn-approve {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-reject {
+            background: #f44336;
+            color: white;
+        }
+
+        .btn-escalate {
+            background: #ff9800;
+            color: white;
+        }
+
+        .btn-skip {
+            background: #9e9e9e;
+            color: white;
+        }
+
+        .timer {
+            font-size: 18px;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        /* Loading */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            font-size: 18px;
+            color: #999;
+        }
+
+        .error {
+            color: #f44336;
+            background: #ffebee;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 20px;
+        }
+
+        /* Keyboard Shortcuts */
+        .shortcuts {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .shortcuts.visible {
+            display: block;
+        }
+
+        .shortcuts h4 {
+            margin-bottom: 10px;
+        }
+
+        .shortcuts kbd {
+            background: #555;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📋 QC Verification Interface</h1>
+            <div class="operator-info">
+                <div class="operator-badge" id="operatorBadge">Operator: Loading...</div>
+                <button class="control-btn" onclick="showShortcuts()">⌨️ Shortcuts</button>
+            </div>
+        </div>
+
+        <!-- Image Viewer -->
+        <div class="image-viewer">
+            <div class="controls">
+                <button class="control-btn" onclick="zoomIn()">🔍 Zoom In</button>
+                <button class="control-btn" onclick="zoomOut()">🔍 Zoom Out</button>
+                <button class="control-btn" onclick="resetView()">⟲ Reset</button>
+                <button class="control-btn" onclick="toggleOverlay()">👁️ Toggle Overlay</button>
+            </div>
+            <canvas id="documentCanvas"></canvas>
+            <div id="overlayContainer"></div>
+            <div id="loadingMessage" class="loading">Loading task...</div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="sidebar">
+            <div class="sidebar-section">
+                <h3>Task Information</h3>
+                <div class="task-info" id="taskInfo">
+                    <div class="info-row">
+                        <span class="info-label">Task ID:</span>
+                        <span class="info-value" id="taskId">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Document Type:</span>
+                        <span class="info-value" id="docType">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Severity:</span>
+                        <span class="info-value" id="severity">-</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">Classification:</span>
+                        <span class="info-value" id="classConf">-</span>
+                    </div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="classConfBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Routing Reasons</h3>
+                <ul id="reasonsList" style="padding-left: 20px; font-size: 13px; color: #666;">
+                </ul>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Fields</h3>
+                <div class="field-list" id="fieldsList">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Issue Categories</h3>
+                <div class="issue-categories" id="issueCategories">
+                </div>
+            </div>
+
+            <div class="sidebar-section">
+                <h3>Notes</h3>
+                <textarea id="notesTextarea" class="notes-textarea" placeholder="Add notes about this document..."></textarea>
+            </div>
+        </div>
+
+        <!-- Action Bar -->
+        <div class="action-bar">
+            <div class="timer" id="timer">00:00</div>
+            <div class="action-buttons">
+                <button class="btn btn-skip" onclick="skipTask()">⏭️ Skip (S)</button>
+                <button class="btn btn-reject" onclick="rejectTask()">❌ Reject (R)</button>
+                <button class="btn btn-escalate" onclick="escalateTask()">⚠️ Escalate (E)</button>
+                <button class="btn btn-approve" onclick="approveTask()">✅ Approve (A)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Help -->
+    <div class="shortcuts" id="shortcuts">
+        <h4>Keyboard Shortcuts</h4>
+        <div><kbd>A</kbd> - Approve task</div>
+        <div><kbd>R</kbd> - Reject task</div>
+        <div><kbd>E</kbd> - Escalate task</div>
+        <div><kbd>S</kbd> - Skip task</div>
+        <div><kbd>N</kbd> - Next field</div>
+        <div><kbd>?</kbd> - Toggle this help</div>
+    </div>
+
+    <script>
+        // Global state
+        let currentTask = null;
+        let operatorId = localStorage.getItem('qc_operator_id') || prompt('Enter your operator ID:');
+        let startTime = null;
+        let timerInterval = null;
+        let modifiedFields = {};
+        let zoom = 1;
+        let panX = 0;
+        let panY = 0;
+        let overlayVisible = true;
+
+        localStorage.setItem('qc_operator_id', operatorId);
+        document.getElementById('operatorBadge').textContent = `Operator: ${operatorId}`;
+
+        // Timer
+        function startTimer() {
+            startTime = Date.now();
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(elapsed / 60).toString().padStart(2, '0');
+                const secs = (elapsed % 60).toString().padStart(2, '0');
+                document.getElementById('timer').textContent = `${mins}:${secs}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+        }
+
+        function getElapsedSeconds() {
+            return startTime ? Math.floor((Date.now() - startTime) / 1000) : 0;
+        }
+
+        // Fetch next task
+        async function fetchNextTask() {
+            try {
+                document.getElementById('loadingMessage').style.display = 'flex';
+                const response = await fetch(`/api/qc/task/next?operator_id=${operatorId}`);
+                const data = await response.json();
+
+                if (data.status === 'empty') {
+                    alert('No tasks available in queue');
+                    return;
+                }
+
+                currentTask = data.task;
+                modifiedFields = {};
+                renderTask();
+                startTimer();
+            } catch (error) {
+                console.error('Error fetching task:', error);
+                alert('Error loading task');
+            }
+        }
+
+        // Render task
+        function renderTask() {
+            if (!currentTask) return;
+
+            document.getElementById('loadingMessage').style.display = 'none';
+
+            // Task info
+            document.getElementById('taskId').textContent = currentTask.task_id;
+            document.getElementById('docType').textContent = currentTask.doc_type;
+            document.getElementById('severity').textContent = currentTask.severity;
+            
+            const classConf = (currentTask.classification_confidence * 100).toFixed(1);
+            document.getElementById('classConf').textContent = `${classConf}%`;
+            document.getElementById('classConfBar').style.width = `${classConf}%`;
+
+            // Reasons
+            const reasonsList = document.getElementById('reasonsList');
+            reasonsList.innerHTML = currentTask.routing_reasons
+                .map(r => `<li>${r}</li>`)
+                .join('');
+
+            // Fields
+            renderFields();
+
+            // Load issue categories
+            loadIssueCategories();
+
+            // Load image
+            loadImage();
+        }
+
+        // Render fields
+        function renderFields() {
+            const fieldsList = document.getElementById('fieldsList');
+            fieldsList.innerHTML = '';
+
+            for (const [fieldName, fieldValue] of Object.entries(currentTask.extracted_fields)) {
+                const confidence = currentTask.field_confidences[fieldName] || 0;
+                
+                const fieldItem = document.createElement('div');
+                fieldItem.className = 'field-item';
+                fieldItem.innerHTML = `
+                    <div class="field-name">${fieldName}</div>
+                    <input type="text" class="field-input" 
+                           data-field="${fieldName}" 
+                           value="${fieldValue || ''}"
+                           placeholder="Enter ${fieldName}">
+                    <div class="field-confidence">
+                        <span>Confidence:</span>
+                        <input type="range" min="0" max="100" value="${confidence * 100}"
+                               data-field-conf="${fieldName}" disabled>
+                        <span>${(confidence * 100).toFixed(0)}%</span>
+                    </div>
+                `;
+                
+                const input = fieldItem.querySelector('.field-input');
+                input.addEventListener('input', (e) => {
+                    modifiedFields[fieldName] = {
+                        original: fieldValue,
+                        corrected: e.target.value,
+                        confidence: 1.0
+                    };
+                    fieldItem.classList.add('modified');
+                });
+
+                fieldsList.appendChild(fieldItem);
+            }
+        }
+
+        // Load issue categories
+        async function loadIssueCategories() {
+            try {
+                const response = await fetch('/api/qc/issue_categories');
+                const data = await response.json();
+                
+                const container = document.getElementById('issueCategories');
+                container.innerHTML = data.categories.map(cat => `
+                    <label class="issue-checkbox">
+                        <input type="checkbox" value="${cat.value}">
+                        ${cat.label}
+                    </label>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading categories:', error);
+            }
+        }
+
+        // Load and display image
+        function loadImage() {
+            if (!currentTask.image_path) return;
+
+            const canvas = document.getElementById('documentCanvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(img, 0, 0);
+            };
+
+            img.src = `/api/qc/image/${currentTask.image_path}`;
+        }
+
+        // Submit verification
+        async function submitVerification(approved, escalate = false) {
+            if (!currentTask) return;
+
+            stopTimer();
+
+            // Collect field corrections
+            const fieldCorrections = Object.entries(modifiedFields).map(([fieldName, data]) => ({
+                field_name: fieldName,
+                original_value: data.original,
+                corrected_value: data.corrected,
+                confidence_rating: data.confidence,
+                notes: null
+            }));
+
+            // Collect selected issue categories
+            const issueCategories = Array.from(
+                document.querySelectorAll('#issueCategories input[type="checkbox"]:checked')
+            ).map(cb => cb.value);
+
+            const notes = document.getElementById('notesTextarea').value;
+
+            const verificationData = {
+                operator_id: operatorId,
+                approved: approved,
+                escalate: escalate,
+                field_corrections: fieldCorrections,
+                issue_categories: issueCategories,
+                operator_confidence: 1.0,
+                time_spent_seconds: getElapsedSeconds(),
+                notes: notes || null
+            };
+
+            try {
+                const response = await fetch(`/api/qc/task/${currentTask.task_id}/submit`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(verificationData)
+                });
+
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Load next task
+                    fetchNextTask();
+                } else {
+                    alert(`Error: ${result.error}`);
+                }
+            } catch (error) {
+                console.error('Error submitting verification:', error);
+                alert('Error submitting verification');
+            }
+        }
+
+        // Action handlers
+        function approveTask() {
+            submitVerification(true, false);
+        }
+
+        function rejectTask() {
+            submitVerification(false, false);
+        }
+
+        function escalateTask() {
+            submitVerification(false, true);
+        }
+
+        async function skipTask() {
+            if (!currentTask) return;
+            
+            stopTimer();
+            
+            try {
+                await fetch(`/api/qc/task/${currentTask.task_id}/release`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({operator_id: operatorId})
+                });
+                
+                fetchNextTask();
+            } catch (error) {
+                console.error('Error releasing task:', error);
+            }
+        }
+
+        // Zoom controls
+        function zoomIn() {
+            zoom = Math.min(zoom * 1.2, 5);
+            applyTransform();
+        }
+
+        function zoomOut() {
+            zoom = Math.max(zoom / 1.2, 0.5);
+            applyTransform();
+        }
+
+        function resetView() {
+            zoom = 1;
+            panX = 0;
+            panY = 0;
+            applyTransform();
+        }
+
+        function applyTransform() {
+            const canvas = document.getElementById('documentCanvas');
+            canvas.style.transform = `scale(${zoom}) translate(${panX}px, ${panY}px)`;
+        }
+
+        function toggleOverlay() {
+            overlayVisible = !overlayVisible;
+            document.getElementById('overlayContainer').style.display = overlayVisible ? 'block' : 'none';
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            switch(e.key.toLowerCase()) {
+                case 'a': approveTask(); break;
+                case 'r': rejectTask(); break;
+                case 'e': escalateTask(); break;
+                case 's': skipTask(); break;
+                case '?': showShortcuts(); break;
+            }
+        });
+
+        function showShortcuts() {
+            const shortcuts = document.getElementById('shortcuts');
+            shortcuts.classList.toggle('visible');
+            setTimeout(() => shortcuts.classList.remove('visible'), 3000);
+        }
+
+        // Initialize
+        fetchNextTask();
+    </script>
+</body>
+</html>

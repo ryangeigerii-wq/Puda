@@ -1,0 +1,32 @@
+{
+  "default": {
+    "classification_threshold": 0.55,
+    "classification_manual_threshold": 0.35,
+    "field_threshold": 0.65,
+    "field_manual_threshold": 0.45
+  },
+  "invoice": {
+    "classification_threshold": 0.6,
+    "classification_manual_threshold": 0.4,
+    "field_threshold": 0.7,
+    "field_manual_threshold": 0.5
+  },
+  "id": {
+    "classification_threshold": 0.6,
+    "classification_manual_threshold": 0.4,
+    "field_threshold": 0.7,
+    "field_manual_threshold": 0.5
+  },
+  "form": {
+    "classification_threshold": 0.55,
+    "classification_manual_threshold": 0.35,
+    "field_threshold": 0.65,
+    "field_manual_threshold": 0.45
+  },
+  "letter": {
+    "classification_threshold": 0.5,
+    "classification_manual_threshold": 0.3,
+    "field_threshold": 0.6,
+    "field_manual_threshold": 0.4
+  }
+}

@@ -1,0 +1,103 @@
+version: '3.8'
+
+services:
+  puda-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: puda-paper-reader
+    image: puda-paper-reader:latest
+    volumes:
+      # Mount source code for development
+      - .:/app
+      # Persistent data storage
+      - puda-data:/app/data
+      # Scanned documents
+      - puda-scans:/app/data/scans
+      # Configuration
+      - ./config:/app/config
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ENVIRONMENT=development
+      # PostgreSQL connection
+      - POSTGRES_HOST=puda-postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=puda_storage
+      - POSTGRES_USER=puda
+      - POSTGRES_PASSWORD=puda
+      # MinIO S3 connection
+      - S3_ENDPOINT=http://puda-minio:9000
+      - S3_ACCESS_KEY=minioadmin
+      - S3_SECRET_KEY=minioadmin
+    depends_on:
+      # App does not require these to be healthy to start serving /api/health.
+      # Start dependencies but do not block app startup on their healthchecks.
+      puda-postgres:
+        condition: service_started
+      puda-minio:
+        condition: service_started
+    ports:
+      - "8080:8080"
+    stdin_open: true
+    tty: true
+    command: python dashboard_api.py --host 0.0.0.0 --port 8080 --audit-dir data
+    networks:
+      - puda-network
+
+  # PostgreSQL database for metadata and audit logs
+  puda-postgres:
+    image: postgres:16-alpine
+    container_name: puda-postgres
+    environment:
+      POSTGRES_DB: puda_storage
+      POSTGRES_USER: puda
+      POSTGRES_PASSWORD: puda
+      POSTGRES_INITDB_ARGS: "-E UTF8"
+    volumes:
+      - puda-postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - puda-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U puda -d puda_storage"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # MinIO S3-compatible storage (optional)
+  puda-minio:
+    image: minio/minio:latest
+    container_name: puda-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - puda-minio-data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - puda-network
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  puda-data:
+    driver: local
+  puda-scans:
+    driver: local
+  puda-postgres-data:
+    driver: local
+  puda-minio-data:
+    driver: local
+
+networks:
+  puda-network:
+    driver: bridge

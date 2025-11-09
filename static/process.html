@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Processing - Puda AI</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 20px 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            color: #667eea;
+            font-size: 1.8em;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-badge {
+            background: #f0f0f0;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            color: #555;
+        }
+        
+        .btn-logout {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9em;
+            font-weight: 600;
+            transition: transform 0.2s;
+        }
+        
+        .btn-logout:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+        }
+        
+        .main-container {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            background: #f8f9fa;
+            margin-bottom: 30px;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-section:hover {
+            background: #e8eef9;
+            border-color: #5568d3;
+        }
+        
+        .upload-section.dragover {
+            background: #d6e3ff;
+            border-color: #4555c7;
+        }
+        
+        .upload-icon {
+            font-size: 4em;
+            margin-bottom: 15px;
+            color: #667eea;
+        }
+        
+        .upload-section h2 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        
+        .upload-section p {
+            color: #7f8c8d;
+            font-size: 0.95em;
+            margin-bottom: 20px;
+        }
+        
+        #fileInput {
+            display: none;
+        }
+        
+        .btn-upload {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        
+        .btn-upload:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .preview-section {
+            display: none;
+            margin-bottom: 30px;
+        }
+        
+        .preview-section.show {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .preview-header h3 {
+            color: #2c3e50;
+        }
+        
+        .btn-clear {
+            background: #95a5a6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85em;
+        }
+        
+        .preview-image {
+            max-width: 100%;
+            border-radius: 8px;
+            border: 2px solid #e0e0e0;
+            margin-bottom: 20px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+        }
+        
+        .btn-process {
+            flex: 1;
+            background: #27ae60;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .btn-process:hover {
+            background: #229954;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(39, 174, 96, 0.4);
+        }
+        
+        .btn-process:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .loading {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .results-section {
+            display: none;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 30px;
+        }
+        
+        .results-section.show {
+            display: block;
+            animation: fadeIn 0.3s;
+        }
+        
+        .results-section h3 {
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        
+        .extracted-text {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        
+        .alert {
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 0.9em;
+            display: none;
+        }
+        
+        .alert.error {
+            background: #fee;
+            border: 1px solid #fcc;
+            color: #c33;
+        }
+        
+        .alert.success {
+            background: #efe;
+            border: 1px solid #cfc;
+            color: #3c3;
+        }
+        
+        .alert.info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            color: #1976d2;
+        }
+        
+        .alert.show {
+            display: block;
+            animation: slideIn 0.3s ease;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .stats-bar {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .stat-item {
+            flex: 1;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            font-size: 0.9em;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 Document Processing</h1>
+        <div class="user-info">
+            <div class="user-badge" id="userBadge">👤 User</div>
+            <button class="btn-logout" onclick="logout()">Logout</button>
+        </div>
+    </div>
+    
+    <div class="main-container">
+        <div id="alert" class="alert"></div>
+        
+        <div class="stats-bar">
+            <div class="stat-item">
+                <div class="stat-value" id="processedCount">0</div>
+                <div class="stat-label">Documents Processed</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="pageCount">0</div>
+                <div class="stat-label">Total Pages</div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value" id="successRate">100%</div>
+                <div class="stat-label">Success Rate</div>
+            </div>
+        </div>
+        
+        <div class="upload-section" id="dropZone">
+            <div class="upload-icon">📤</div>
+            <h2>Upload Document</h2>
+            <p>Drag and drop a document here or click to browse</p>
+            <input type="file" id="fileInput" accept="image/*,.pdf" multiple>
+            <button class="btn-upload" onclick="document.getElementById('fileInput').click()">
+                Choose Files
+            </button>
+        </div>
+        
+        <div class="preview-section" id="previewSection">
+            <div class="preview-header">
+                <h3 id="fileName">Selected File</h3>
+                <button class="btn-clear" onclick="clearFile()">Clear</button>
+            </div>
+            <img id="previewImage" class="preview-image" alt="Preview">
+            <div class="action-buttons">
+                <button class="btn-process" id="processBtn" onclick="processDocument()">
+                    🔍 Process with AI OCR
+                </button>
+            </div>
+        </div>
+        
+        <div class="results-section" id="resultsSection">
+            <h3>📋 Extracted Text</h3>
+            <div class="extracted-text" id="extractedText">
+                Processing...
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_BASE = window.location.origin;
+        let currentFile = null;
+        let processedCount = 0;
+        let totalPages = 0;
+        
+        // Check authentication
+        function checkAuth() {
+            const token = localStorage.getItem('session_token');
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Verify token and get user info
+            fetch(`${API_BASE}/api/auth/me`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => {
+                if (!response.ok) {
+                    localStorage.removeItem('session_token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login.html';
+                    return null;
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data) {
+                    displayUserInfo(data);
+                }
+            })
+            .catch(() => {
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('user');
+                window.location.href = '/login.html';
+            });
+        }
+        
+        function displayUserInfo(user) {
+            const userBadge = document.getElementById('userBadge');
+            userBadge.textContent = `👤 ${user.username} (${user.department})`;
+        }
+        
+        function logout() {
+            const token = localStorage.getItem('session_token');
+            
+            fetch(`${API_BASE}/api/auth/logout`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .finally(() => {
+                localStorage.removeItem('session_token');
+                localStorage.removeItem('user');
+                window.location.href = '/login.html';
+            });
+        }
+        
+        function showAlert(message, type) {
+            const alertBox = document.getElementById('alert');
+            alertBox.textContent = message;
+            alertBox.className = `alert ${type} show`;
+            setTimeout(() => {
+                alertBox.classList.remove('show');
+            }, 5000);
+        }
+        
+        // File upload handling
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        
+        dropZone.addEventListener('click', () => {
+            fileInput.click();
+        });
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                handleFile(files[0]);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFile(e.target.files[0]);
+            }
+        });
+        
+        function handleFile(file) {
+            if (!file.type.startsWith('image/') && file.type !== 'application/pdf') {
+                showAlert('Please upload an image or PDF file', 'error');
+                return;
+            }
+            
+            currentFile = file;
+            document.getElementById('fileName').textContent = file.name;
+            
+            // Show preview for images
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    document.getElementById('previewImage').src = e.target.result;
+                    document.getElementById('previewSection').classList.add('show');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // For PDFs, show a placeholder
+                document.getElementById('previewImage').src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200"><rect fill="%23f0f0f0" width="200" height="200"/><text x="50%" y="50%" text-anchor="middle" fill="%23667eea" font-size="60">📄</text></svg>';
+                document.getElementById('previewSection').classList.add('show');
+            }
+            
+            document.getElementById('resultsSection').classList.remove('show');
+        }
+        
+        function clearFile() {
+            currentFile = null;
+            fileInput.value = '';
+            document.getElementById('previewSection').classList.remove('show');
+            document.getElementById('resultsSection').classList.remove('show');
+        }
+        
+        async function processDocument() {
+            if (!currentFile) {
+                showAlert('Please select a file first', 'error');
+                return;
+            }
+            
+            const processBtn = document.getElementById('processBtn');
+            processBtn.disabled = true;
+            processBtn.innerHTML = '<span class="loading"></span> Processing...';
+            
+            // Simulate OCR processing (replace with actual API call)
+            setTimeout(() => {
+                const mockText = `Document: ${currentFile.name}
+                
+This is a simulated OCR extraction. In production, this would connect to:
+- Tesseract OCR for text extraction
+- OpenCV for image preprocessing
+- ML classifier for document type detection
+
+Extracted Content:
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. 
+Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua.
+
+Document Metadata:
+- File Size: ${(currentFile.size / 1024).toFixed(2)} KB
+- Type: ${currentFile.type}
+- Processed: ${new Date().toLocaleString()}
+
+Status: ✅ Successfully processed`;
+                
+                document.getElementById('extractedText').textContent = mockText;
+                document.getElementById('resultsSection').classList.add('show');
+                
+                // Update stats
+                processedCount++;
+                totalPages += 1;
+                document.getElementById('processedCount').textContent = processedCount;
+                document.getElementById('pageCount').textContent = totalPages;
+                
+                showAlert('Document processed successfully!', 'success');
+                
+                processBtn.disabled = false;
+                processBtn.innerHTML = '🔍 Process with AI OCR';
+            }, 2000);
+        }
+        
+        // Initialize
+        checkAuth();
+        
+        // Load stats from localStorage
+        const savedStats = localStorage.getItem('process_stats');
+        if (savedStats) {
+            const stats = JSON.parse(savedStats);
+            processedCount = stats.processed || 0;
+            totalPages = stats.pages || 0;
+            document.getElementById('processedCount').textContent = processedCount;
+            document.getElementById('pageCount').textContent = totalPages;
+        }
+        
+        // Save stats on page unload
+        window.addEventListener('beforeunload', () => {
+            localStorage.setItem('process_stats', JSON.stringify({
+                processed: processedCount,
+                pages: totalPages
+            }));
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,75 @@
+# Python dependencies for AI Paper Reader
+
+# Core Python packages
+python-dateutil>=2.8.2
+
+# Logging and configuration
+pyyaml>=6.0
+
+# Future dependencies (uncomment as needed)
+# OCR and Image Processing
+Pillow>=10.0.0
+opencv-python>=4.8.0
+pytesseract>=0.3.10
+# Optional advanced OCR (commented to avoid heavy install by default)
+# paddleocr>=2.7.0
+PyPDF2>=3.0.0
+
+# NER & Extraction (Phase 1)
+spacy>=3.7.0  # NLP library for Named Entity Recognition
+spacy-transformers>=1.3.0  # Transformer models for spaCy
+langdetect>=1.0.9  # Language detection for multilingual OCR
+phonenumbers>=8.13.0  # Phone number extraction and validation
+
+# PDF Generation and Merging
+img2pdf>=0.5.0
+pypdf>=3.17.0
+
+# Machine Learning (Modular ML Module)
+# PyTorch — Training backbone
+torch>=2.0.0  # PyTorch for deep learning models
+torchvision>=0.15.0  # Pre-trained models and image transforms
+# Transformers (Hugging Face) — Pretrained models and tokenizers
+transformers>=4.35.0  # Hugging Face transformers for NLP and vision models
+tokenizers>=0.15.0  # Fast tokenizers for text processing
+# Data Manipulation
+numpy>=1.24.0  # Numerical computing
+pandas>=2.0.0  # Data manipulation and analysis
+# Model Export (Production Deployment)
+# ONNX Runtime — Portable inference backend
+onnx>=1.14.0  # ONNX format for cross-platform deployment
+onnxruntime>=1.16.0  # ONNX inference engine (CPU)
+# Optional: Advanced ML features
+# Optuna — Hyperparameter tuning (optional, add when needed)
+# optuna>=3.4.0  # Automated hyperparameter optimization
+# tensorboard>=2.14.0  # Training visualization
+# scikit-learn>=1.3.0  # Traditional ML algorithms
+
+# API Framework
+# FastAPI — Simple REST interface for inference
+flask>=3.0.0  # Current web framework (dashboard API)
+flask-limiter>=3.5.0  # Rate limiting for API endpoints
+fastapi>=0.104.0  # Modern async API framework for ML inference
+uvicorn[standard]>=0.24.0  # ASGI server for FastAPI
+pydantic>=2.4.0  # Data validation for FastAPI
+python-multipart>=0.0.6  # For file upload support in FastAPI
+requests>=2.31.0  # HTTP library for API client
+
+# Storage and Cloud Integration
+boto3>=1.34.0  # AWS S3 and S3-compatible storage (MinIO, Wasabi, etc.)
+psycopg2-binary>=2.9.9  # PostgreSQL database adapter
+fastapi>=0.104.0  # Modern web framework for building APIs
+uvicorn[standard]>=0.24.0  # ASGI server for FastAPI
+python-multipart>=0.0.6  # For file upload support in FastAPI
+requests>=2.31.0  # HTTP library for API client
+
+# Database
+# sqlalchemy>=2.0.0
+# psycopg2-binary>=2.9.0  # PostgreSQL
+# alembic>=1.12.0  # Migrations
+
+# Authorization and Security
+cryptography>=41.0.0  # AES-256 encryption for authorization layer
+# python-jose[cryptography]>=3.3.0
+# passlib[bcrypt]>=1.7.4
+# python-multipart>=0.0.6

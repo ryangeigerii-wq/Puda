@@ -1,0 +1,23 @@
+# Docker Compose Override Example
+# Copy this to docker-compose.override.yml for custom settings
+# This file is automatically loaded by docker-compose and overrides docker-compose.yml
+
+version: '3.8'
+
+services:
+  puda-app:
+    # Custom environment variables
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      
+    # Additional volume mounts
+    # volumes:
+    #   - ./custom-data:/app/custom
+    
+    # Override command for development
+    # command: python -m flask run --host=0.0.0.0 --port=8000
+    
+    # Add ports for debugging
+    # ports:
+    #   - "5678:5678"  # debugpy
