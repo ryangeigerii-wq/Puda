@@ -30,6 +30,11 @@ try:
 except ImportError as e:
     logging.warning(f"ML modules not available: {e}")
     MODELS_AVAILABLE = False
+    # Define placeholder types when modules unavailable
+    PudaModel = type(None)  # type: ignore
+    DocumentProcessor = type(None)  # type: ignore
+    load_tokenizer = None  # type: ignore
+    extract_text_from_file = None  # type: ignore
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)

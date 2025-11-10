@@ -26,14 +26,15 @@ img2pdf>=0.5.0
 pypdf>=3.17.0
 
 # Machine Learning (Modular ML Module)
-# PyTorch — Training backbone
-torch>=2.0.0  # PyTorch for deep learning models
+# PyTorch — Training backbone (CPU version for local dev, use GPU index for production)
+torch>=2.2.0  # PyTorch for deep learning models
+# For CPU-only: pip install torch --index-url https://download.pytorch.org/whl/cpu
 torchvision>=0.15.0  # Pre-trained models and image transforms
 # Transformers (Hugging Face) — Pretrained models and tokenizers
 transformers>=4.35.0  # Hugging Face transformers for NLP and vision models
 tokenizers>=0.15.0  # Fast tokenizers for text processing
 # Data Manipulation
-numpy>=1.24.0,<2.0  # Numerical computing (pin <2.0 for current torch wheels compatibility)
+numpy>=1.24.0,<2.0  # Numerical computing (pin <2.0 for torch 2.2.0 compatibility)
 pandas>=2.0.0  # Data manipulation and analysis
 # Model Export (Production Deployment)
 # ONNX Runtime — Portable inference backend
@@ -46,7 +47,6 @@ onnxruntime>=1.16.0  # ONNX inference engine (CPU)
 # scikit-learn>=1.3.0  # Traditional ML algorithms
 
 # API Framework
-# FastAPI — Simple REST interface for inference
 flask>=3.0.0  # Current web framework (dashboard API)
 flask-limiter>=3.5.0  # Rate limiting for API endpoints
 fastapi>=0.104.0  # Modern async API framework for ML inference
@@ -58,10 +58,6 @@ requests>=2.31.0  # HTTP library for API client
 # Storage and Cloud Integration
 boto3>=1.34.0  # AWS S3 and S3-compatible storage (MinIO, Wasabi, etc.)
 psycopg2-binary>=2.9.9  # PostgreSQL database adapter
-fastapi>=0.104.0  # Modern web framework for building APIs
-uvicorn[standard]>=0.24.0  # ASGI server for FastAPI
-python-multipart>=0.0.6  # For file upload support in FastAPI
-requests>=2.31.0  # HTTP library for API client
 
 # Database
 # sqlalchemy>=2.0.0
