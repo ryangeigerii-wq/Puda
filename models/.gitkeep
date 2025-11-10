@@ -1,0 +1,3 @@
+# This directory stores trained model checkpoints
+# Model files are excluded from Git due to size (see .gitignore)
+# Use Git LFS or upload to Hugging Face Model Hub for sharing

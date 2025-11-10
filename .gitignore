@@ -56,6 +56,12 @@ logs/
 scans/
 output/
 
+# Model checkpoints (too large for GitHub, use Git LFS or model hub)
+models/*.pt
+models/*.pth
+models/*.onnx
+!models/.gitkeep
+
 # Environment
 .env
 .env.local
