@@ -36,6 +36,7 @@ tokenizers>=0.15.0  # Fast tokenizers for text processing
 # Data Manipulation
 numpy>=1.24.0  # Numerical computing (torch 2.9+ supports numpy 2.x)
 pandas>=2.0.0  # Data manipulation and analysis
+openpyxl>=3.1.0  # Excel file support for pandas
 # Model Export (Production Deployment)
 # ONNX Runtime — Portable inference backend
 onnx>=1.14.0  # ONNX format for cross-platform deployment

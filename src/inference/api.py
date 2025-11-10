@@ -151,6 +151,9 @@ class AnalyzeResponse(BaseModel):
     summary: SummarizeResponse = Field(..., description="Text summary")
     routing: Dict[str, Any] = Field(..., description="Routing decision metrics")
     metrics: Dict[str, Any] = Field(..., description="Processing metrics")
+    
+    # Warehouse-optimized flat structure for CSV/Excel export
+    structured_data: Optional[Dict[str, Any]] = Field(None, description="Flattened data ready for CSV/Excel export")
 
 
 class FeedbackRequest(BaseModel):
@@ -368,18 +371,125 @@ async def analyze_endpoint(
             method=result["summary"]["method"]
         )
         
+        # Generate warehouse-optimized structured data for CSV/Excel export
+        structured_data = _generate_structured_export(
+            text=text,
+            classification=classification,
+            extraction=extraction,
+            summary=summary,
+            ocr_result=ocr_result
+        )
+        
         return AnalyzeResponse(
             ocr=ocr_result,
             classification=classification,
             extraction=extraction,
             summary=summary,
             routing=result.get("routing", {}),
-            metrics=result.get("metrics", {})
+            metrics=result.get("metrics", {}),
+            structured_data=structured_data
         )
         
     except Exception as e:
         logger.error(f"Analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+
+
+def _generate_structured_export(
+    text: str,
+    classification: ClassifyResponse,
+    extraction: ExtractResponse,
+    summary: SummarizeResponse,
+    ocr_result: Optional[OCRResponse]
+) -> Dict[str, Any]:
+    """
+    Generate flattened structured data for CSV/Excel export.
+    
+    Optimized for warehouse scanner outputs:
+    - Single-level dictionary (no nesting)
+    - All values are primitive types (str, float, int)
+    - Empty fields default to empty strings (not None)
+    - Ready for pandas DataFrame or CSV writer
+    """
+    from datetime import datetime
+    
+    # Base metadata
+    structured = {
+        "scan_timestamp": datetime.now().isoformat(),
+        "document_type": classification.doc_type,
+        "classification_confidence": round(classification.confidence, 4),
+        "text_preview": text[:200].replace("\n", " ").strip() if text else "",
+        "full_text": text.replace("\n", " ").strip() if text else "",
+        "summary": summary.summary.replace("\n", " ").strip(),
+    }
+    
+    # OCR metadata if available
+    if ocr_result:
+        structured.update({
+            "ocr_confidence": round(ocr_result.confidence, 4),
+            "ocr_language": ocr_result.language,
+            "ocr_word_count": ocr_result.word_count,
+        })
+    else:
+        structured.update({
+            "ocr_confidence": "",
+            "ocr_language": "",
+            "ocr_word_count": "",
+        })
+    
+    # Extract first occurrence of each entity type (warehouse priority)
+    # Most warehouse documents have single invoice#, date, amount, etc.
+    entities = extraction.fields
+    
+    # Dates - extract first date found
+    dates = entities.get("DATE", [])
+    structured["date"] = dates[0]["text"] if dates else ""
+    structured["date_confidence"] = round(dates[0].get("confidence", 1.0), 4) if dates else ""
+    
+    # Amounts - extract first amount found
+    amounts = entities.get("AMOUNT", [])
+    structured["amount"] = amounts[0]["text"] if amounts else ""
+    structured["amount_confidence"] = round(amounts[0].get("confidence", 1.0), 4) if amounts else ""
+    
+    # Invoice/Document numbers
+    invoices = entities.get("INVOICE", [])
+    structured["invoice_number"] = invoices[0]["text"] if invoices else ""
+    structured["invoice_confidence"] = round(invoices[0].get("confidence", 1.0), 4) if invoices else ""
+    
+    # Organizations
+    orgs = entities.get("ORG", [])
+    structured["organization"] = orgs[0]["text"] if orgs else ""
+    structured["organization_confidence"] = round(orgs[0].get("confidence", 1.0), 4) if orgs else ""
+    
+    # Names
+    names = entities.get("NAME", [])
+    structured["contact_name"] = names[0]["text"] if names else ""
+    structured["name_confidence"] = round(names[0].get("confidence", 1.0), 4) if names else ""
+    
+    # Addresses
+    addresses = entities.get("ADDR", [])
+    structured["address"] = addresses[0]["text"] if addresses else ""
+    structured["address_confidence"] = round(addresses[0].get("confidence", 1.0), 4) if addresses else ""
+    
+    # Emails
+    emails = entities.get("EMAIL", [])
+    structured["email"] = emails[0]["text"] if emails else ""
+    
+    # Phones
+    phones = entities.get("PHONE", [])
+    structured["phone"] = phones[0]["text"] if phones else ""
+    
+    # Counts for multi-value fields
+    structured["total_dates"] = len(dates)
+    structured["total_amounts"] = len(amounts)
+    structured["total_organizations"] = len(orgs)
+    structured["total_entities"] = extraction.count
+    
+    # Additional fields for warehouse tracking
+    structured["processing_status"] = "completed"
+    structured["requires_review"] = "yes" if classification.confidence < 0.7 else "no"
+    
+    return structured
 
 
 # ==================== Feedback Endpoint ====================

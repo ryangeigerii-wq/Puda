@@ -1,0 +1,49 @@
+scan_timestamp,document_type,classification_confidence,text_preview,full_text,summary,date,date_confidence,amount,amount_confidence,invoice_number,invoice_confidence,organization,organization_confidence,contact_name,name_confidence,address,address_confidence,email,phone,total_dates,total_amounts,total_organizations,total_entities,processing_status,requires_review,ocr_confidence,ocr_language,ocr_word_count
+2025-11-10T13:07:57.483952,invoice,0.9547,"ACME Corporation Invoice #INV-2024-12345 Date: 2024-01-15 Amount: $1,984.56","ACME Corporation
+123 Business Way
+New York, NY 10001
+
+INVOICE
+
+Invoice Number: INV-2024-12345
+Date: 2024-01-15
+
+Bill To:
+John Smith
+Tech Solutions Inc.
+456 Tech Drive
+San Francisco, CA 94102
+
+Description                     Amount
+------------------------------------
+Consulting Services            $1,234.56
+Software License              $500.00
+Support & Maintenance         $250.00
+                              --------
+Total Due:                    $1,984.56
+
+Payment Terms: Net 30
+Contact: billing@acme.com
+Phone: +1-555-0123","Invoice from ACME Corporation dated 2024-01-15 for consulting services, software license, and support totaling $1,984.56",2024-01-15,0.9812,"$1,984.56",0.9534,INV-2024-12345,0.9923,ACME Corporation,0.9687,John Smith,0.9234,"123 Business Way, New York, NY 10001",0.8876,billing@acme.com,+1-555-0123,1,4,2,12,completed,no,,,
+2025-11-10T13:07:57.483952,receipt,0.9823,"Best Buy Store #1234 Receipt Date: 11/10/2024 Total: $1,023.12","Best Buy Store #1234
+789 Shopping Blvd
+Los Angeles, CA 90001
+Tel: (555) 123-4567
+
+RECEIPT
+
+Date: 11/10/2024 2:45 PM
+Receipt #: 5678-9012-3456
+
+Items:
+Laptop Computer          $899.99
+Wireless Mouse           $29.99
+USB Cable                $12.99
+                        -------
+Subtotal:                $942.97
+Tax (8.5%):              $80.15
+                        -------
+TOTAL:                   $1,023.12
+
+Payment: Visa ****1234
+Thank you for shopping!","Best Buy receipt for laptop computer, wireless mouse, and USB cable totaling $1,023.12",11/10/2024,0.9956,"$1,023.12",0.9789,5678-9012-3456,0.9654,Best Buy,0.9912,,,"789 Shopping Blvd, Los Angeles, CA 90001",0.9123,,(555) 123-4567,1,5,1,8,completed,no,,,
