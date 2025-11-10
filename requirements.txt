@@ -33,7 +33,7 @@ torchvision>=0.15.0  # Pre-trained models and image transforms
 transformers>=4.35.0  # Hugging Face transformers for NLP and vision models
 tokenizers>=0.15.0  # Fast tokenizers for text processing
 # Data Manipulation
-numpy>=1.24.0  # Numerical computing
+numpy>=1.24.0,<2.0  # Numerical computing (pin <2.0 for current torch wheels compatibility)
 pandas>=2.0.0  # Data manipulation and analysis
 # Model Export (Production Deployment)
 # ONNX Runtime — Portable inference backend

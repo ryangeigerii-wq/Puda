@@ -9,7 +9,7 @@ Export Puda ML models to different formats:
 Philosophy: Every model must be exportable for production deployment.
 """
 
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Union
 from pathlib import Path
 import json
 import torch
@@ -21,6 +21,7 @@ try:
     ONNX_AVAILABLE = True
 except ImportError:
     ONNX_AVAILABLE = False
+    ort = None  # ensure symbol defined for type checkers
 
 
 class ModelExporter:
@@ -57,10 +58,106 @@ class ModelExporter:
         self.model = model
         self.input_shape = input_shape
         self.model.eval()
+
+    # ---------------- TEXT / SEQUENCE EXPORT EXTENSIONS -----------------
+    def export_sequence_model(
+        self,
+        output_path: str,
+        max_seq_len: int = 512,
+        opset_version: int = 14,
+        dynamic_batch: bool = True,
+        include_extraction: bool = True
+    ) -> Dict[str, Any]:
+        """Export a transformer-style sequence model (e.g. PudaModel) to ONNX.
+
+        Handles token ids + attention mask inputs and returns classification and
+        extraction logits as separate outputs for downstream routing.
+        """
+        if not ONNX_AVAILABLE:
+            raise ImportError("ONNX not installed. 'pip install onnx onnxruntime' ")
+        path_obj = Path(output_path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        # Dummy inputs (batch=1, seq_len=max_seq_len)
+        dummy_input_ids = torch.randint(0, 1000, (1, max_seq_len), dtype=torch.long)
+        dummy_attn = torch.ones((1, max_seq_len), dtype=torch.long)
+
+        dynamic_axes = {
+            "input_ids": {0: "batch", 1: "sequence"},
+            "attention_mask": {0: "batch", 1: "sequence"},
+            "classification_logits": {0: "batch"},
+        }
+        if include_extraction:
+            dynamic_axes["extraction_logits"] = {0: "batch", 1: "sequence"}
+
+        input_names = ["input_ids", "attention_mask"]
+        output_names = ["classification_logits"]
+        if include_extraction:
+            output_names.append("extraction_logits")
+
+        print("Exporting sequence model to ONNX...")
+        torch.onnx.export(
+            self.model,
+            (dummy_input_ids, dummy_attn),
+            str(path_obj),
+            input_names=input_names,
+            output_names=output_names,
+            dynamic_axes=dynamic_axes if dynamic_batch else None,
+            opset_version=opset_version,
+            do_constant_folding=True
+        )
+        size_mb = path_obj.stat().st_size / 1024 / 1024
+        print(f"  ✓ Sequence model exported: {path_obj} ({size_mb:.2f} MB)")
+        return {
+            "format": "onnx",
+            "sequence": True,
+            "file_size_mb": size_mb,
+            "opset_version": opset_version,
+            "dynamic_axes": dynamic_batch,
+            "include_extraction": include_extraction
+        }
+
+    def quantize_onnx(
+        self,
+        onnx_path: str,
+        output_path: Optional[str] = None,
+        per_channel: bool = True
+    ) -> Dict[str, Any]:
+        """Apply dynamic quantization to an existing ONNX model for CPU speedups."""
+        if not ONNX_AVAILABLE:
+            raise ImportError("ONNX Runtime not installed for quantization")
+        try:
+            from onnxruntime.quantization import quantize_dynamic, QuantType
+        except Exception as e:
+            raise ImportError(f"Quantization module unavailable: {e}")
+
+        onnx_path_obj = Path(onnx_path)
+        if output_path is None:
+            output_path = str(onnx_path_obj.with_name(onnx_path_obj.stem + "_int8.onnx"))
+
+        weight_type = QuantType.QInt8 if per_channel else QuantType.QUInt8
+        print("Quantizing ONNX model (dynamic)...")
+        quantize_dynamic(
+            model_input=str(onnx_path),
+            model_output=output_path,
+            per_channel=per_channel,
+            weight_type=weight_type
+        )
+        orig_size = onnx_path_obj.stat().st_size / 1024 / 1024
+        new_size = Path(output_path).stat().st_size / 1024 / 1024
+        reduction = (1 - new_size / orig_size) * 100
+        print(f"  ✓ Quantized model saved: {output_path} (reduction {reduction:.1f}%)")
+        return {
+            "quantized_model": output_path,
+            "original_size_mb": orig_size,
+            "quantized_size_mb": new_size,
+            "size_reduction_percent": reduction,
+            "per_channel": per_channel
+        }
     
     def export_onnx(
         self,
-        output_path: str,
+        output_path: Union[str, Path],
         opset_version: int = 14,
         optimize: bool = True,
         dynamic_axes: Optional[Dict[str, Any]] = None
@@ -85,30 +182,30 @@ class ModelExporter:
             raise ImportError(
                 "ONNX not installed. Install via: pip install onnx onnxruntime"
             )
-        
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
+
+        path_obj = Path(output_path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+
         # Create dummy input
         dummy_input = torch.randn(*self.input_shape)
-        
+
         # Default dynamic axes for batch dimension
         if dynamic_axes is None:
             dynamic_axes = {
                 "input": {0: "batch_size"},
                 "output": {0: "batch_size"}
             }
-        
-        print(f"Exporting to ONNX...")
+
+        print("Exporting to ONNX...")
         print(f"  Input shape: {self.input_shape}")
         print(f"  Opset version: {opset_version}")
         print(f"  Dynamic axes: {dynamic_axes is not None}")
-        
+
         # Export to ONNX
         torch.onnx.export(
             self.model,
             dummy_input,
-            str(output_path),
+            str(path_obj),
             export_params=True,
             opset_version=opset_version,
             do_constant_folding=True,
@@ -116,17 +213,17 @@ class ModelExporter:
             output_names=["output"],
             dynamic_axes=dynamic_axes
         )
-        
-        print(f"  ✓ Exported to: {output_path}")
-        
+
+        print(f"  ✓ Exported to: {path_obj}")
+
         # Optimize ONNX model
         if optimize:
-            self._optimize_onnx(output_path)
-        
+            self._optimize_onnx(path_obj)
+
         # Get metadata
-        file_size_mb = output_path.stat().st_size / 1024 / 1024
+        file_size_mb = path_obj.stat().st_size / 1024 / 1024
         print(f"  ✓ File size: {file_size_mb:.2f} MB")
-        
+
         # Save metadata
         metadata = {
             "format": "onnx",
@@ -137,16 +234,16 @@ class ModelExporter:
             "file_size_mb": file_size_mb,
             "model_class": self.model.__class__.__name__
         }
-        
-        metadata_path = output_path.with_suffix(".json")
+
+        metadata_path = path_obj.with_suffix(".json")
         with open(metadata_path, "w") as f:
             json.dump(metadata, f, indent=2)
-        
+
         print(f"  ✓ Metadata saved: {metadata_path}")
-        
+
         return metadata
     
-    def _optimize_onnx(self, model_path: Path):
+    def _optimize_onnx(self, model_path: Union[str, Path]):
         """
         Apply ONNX optimization passes.
         
@@ -268,15 +365,15 @@ class ModelExporter:
         Returns:
             Dictionary with export metadata
         """
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        print(f"Exporting to TorchScript...")
+        path_obj = Path(output_path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        print("Exporting to TorchScript...")
         print(f"  Method: {method}")
-        
+
         # Create dummy input
         dummy_input = torch.randn(*self.input_shape)
-        
+
         # Export
         if method == "trace":
             traced_model = torch.jit.trace(self.model, dummy_input)
@@ -284,14 +381,14 @@ class ModelExporter:
             traced_model = torch.jit.script(self.model)
         else:
             raise ValueError(f"Unknown method: {method}")
-        
+
         # Save
-        traced_model.save(str(output_path))
-        
-        file_size_mb = output_path.stat().st_size / 1024 / 1024
-        print(f"  ✓ Exported to: {output_path}")
+        traced_model.save(str(path_obj))
+
+        file_size_mb = path_obj.stat().st_size / 1024 / 1024
+        print(f"  ✓ Exported to: {path_obj}")
         print(f"  ✓ File size: {file_size_mb:.2f} MB")
-        
+
         return {
             "format": "torchscript",
             "method": method,
@@ -313,12 +410,12 @@ class ModelExporter:
         Returns:
             Dictionary with export metadata
         """
-        output_path = Path(output_path)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        print(f"Exporting quantized model...")
+        path_obj = Path(output_path)
+        path_obj.parent.mkdir(parents=True, exist_ok=True)
+
+        print("Exporting quantized model...")
         print(f"  Type: {quantization_type}")
-        
+
         if quantization_type == "dynamic":
             # Dynamic quantization (easiest, good for CPU)
             quantized_model = torch.quantization.quantize_dynamic(
@@ -328,22 +425,22 @@ class ModelExporter:
             )
         else:
             raise NotImplementedError(f"Quantization type '{quantization_type}' not implemented")
-        
+
         # Save
         torch.save({
             "model_state_dict": quantized_model.state_dict(),
             "quantization_type": quantization_type
-        }, str(output_path))
-        
-        file_size_mb = output_path.stat().st_size / 1024 / 1024
-        print(f"  ✓ Exported to: {output_path}")
+        }, str(path_obj))
+
+        file_size_mb = path_obj.stat().st_size / 1024 / 1024
+        print(f"  ✓ Exported to: {path_obj}")
         print(f"  ✓ File size: {file_size_mb:.2f} MB")
-        
+
         # Compare sizes
         original_size = sum(p.numel() * p.element_size() for p in self.model.parameters()) / 1024 / 1024
         reduction = (1 - file_size_mb / original_size) * 100
         print(f"  ✓ Size reduction: {reduction:.1f}%")
-        
+
         return {
             "format": "quantized_pytorch",
             "quantization_type": quantization_type,
@@ -351,7 +448,7 @@ class ModelExporter:
             "size_reduction_percent": reduction
         }
     
-    def export_all(self, output_dir: str, base_name: str = "model") -> Dict[str, Any]:
+    def export_all(self, output_dir: Union[str, Path], base_name: str = "model") -> Dict[str, Any]:
         """
         Export model to all formats.
         
@@ -362,67 +459,67 @@ class ModelExporter:
         Returns:
             Dictionary with all export results
         """
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-        
-        print("="*60)
+        output_dir_path = Path(output_dir)
+        output_dir_path.mkdir(parents=True, exist_ok=True)
+
+        print("=" * 60)
         print(f"Exporting {self.model.__class__.__name__} to all formats")
-        print("="*60)
-        
-        results = {}
-        
+        print("=" * 60)
+
+        results: Dict[str, Any] = {}
+
         # ONNX
         print("\n1. ONNX Export")
         print("-" * 60)
         try:
-            onnx_path = output_dir / f"{base_name}.onnx"
+            onnx_path = output_dir_path / f"{base_name}.onnx"
             results["onnx"] = self.export_onnx(str(onnx_path))
             results["onnx"]["verified"] = self.verify_onnx(str(onnx_path))
         except Exception as e:
             print(f"  ✗ ONNX export failed: {e}")
             results["onnx"] = {"error": str(e)}
-        
+
         # TorchScript
         print("\n2. TorchScript Export")
         print("-" * 60)
         try:
-            ts_path = output_dir / f"{base_name}.pt"
+            ts_path = output_dir_path / f"{base_name}.pt"
             results["torchscript"] = self.export_torchscript(str(ts_path))
         except Exception as e:
             print(f"  ✗ TorchScript export failed: {e}")
             results["torchscript"] = {"error": str(e)}
-        
+
         # Quantized
         print("\n3. Quantized Export")
         print("-" * 60)
         try:
-            quant_path = output_dir / f"{base_name}_quantized.pt"
+            quant_path = output_dir_path / f"{base_name}_quantized.pt"
             results["quantized"] = self.export_quantized(str(quant_path))
         except Exception as e:
             print(f"  ✗ Quantized export failed: {e}")
             results["quantized"] = {"error": str(e)}
-        
+
         # Summary
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("Export Summary")
-        print("="*60)
-        
+        print("=" * 60)
+
         for fmt, result in results.items():
             if "error" not in result:
                 size = result.get("file_size_mb", 0)
                 print(f"  ✓ {fmt.upper()}: {size:.2f} MB")
             else:
                 print(f"  ✗ {fmt.upper()}: {result['error']}")
-        
+
         print()
-        
+
         # Save summary
-        summary_path = output_dir / f"{base_name}_export_summary.json"
+        summary_path = output_dir_path / f"{base_name}_export_summary.json"
         with open(summary_path, "w") as f:
             json.dump(results, f, indent=2)
-        
+
         print(f"✓ Export summary saved: {summary_path}")
-        
+
         return results
 
 

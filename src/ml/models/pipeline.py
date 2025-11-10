@@ -13,6 +13,8 @@ import numpy as np
 
 from ..ocr import OCREngine, OCRResult
 from .puda_model import PudaModel, load_tokenizer
+from ..extraction.extractor import extract_entities
+from ..summarization.summarizer import summarize
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +32,9 @@ class DocumentProcessor:
         model: Optional[PudaModel] = None,
         tokenizer = None,
         ocr_engine: Optional[OCREngine] = None,
-        device: str = 'cpu'
+        device: str = 'cpu',
+        cpu_optimize: bool = True,
+        cache_size: int = 256
     ):
         """
         Initialize document processor.
@@ -50,12 +54,22 @@ class DocumentProcessor:
             logger.info("Created default PudaModel")
         
         self.model = model.to(device)
+        if cpu_optimize and device == 'cpu':
+            try:
+                self.model.optimize_for_cpu()
+            except Exception as e:
+                logger.warning(f"CPU optimization failed: {e}")
         self.model.eval()
         
         # Load tokenizer
         if tokenizer is None:
             tokenizer = load_tokenizer()
         self.tokenizer = tokenizer
+        # Simple LRU caches for tokenization & summaries
+        from collections import OrderedDict
+        self._tok_cache = OrderedDict()
+        self._summary_cache = OrderedDict()
+        self._cache_size = cache_size
         
         # Load OCR engine
         if ocr_engine is None:
@@ -120,7 +134,9 @@ class DocumentProcessor:
     def process_text(
         self,
         text: str,
-        include_embeddings: bool = False
+        include_embeddings: bool = False,
+        include_summary: bool = True,
+        include_patterns: bool = True
     ) -> Dict:
         """
         Process text through PudaModel.
@@ -130,16 +146,25 @@ class DocumentProcessor:
             include_embeddings: Include model embeddings
         
         Returns:
-            Dictionary with classification, extraction, and confidence
+            Dictionary with classification, extraction, summary (optional) and confidence
         """
         # Tokenize
-        inputs = self.tokenizer(
-            text,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=512
-        )
+        cache_key = f"tok::{hash(text)}"
+        if cache_key in self._tok_cache:
+            inputs = self._tok_cache[cache_key]
+            # Move accessed item to end (LRU)
+            self._tok_cache.move_to_end(cache_key)
+        else:
+            inputs = self.tokenizer(
+                text,
+                return_tensors="pt",
+                padding=True,
+                truncation=True,
+                max_length=512
+            )
+            self._tok_cache[cache_key] = inputs
+            if len(self._tok_cache) > self._cache_size:
+                self._tok_cache.popitem(last=False)
         
         # Move to device
         input_ids = inputs['input_ids'].to(self.device)
@@ -164,23 +189,52 @@ class DocumentProcessor:
         doc_type = self.model.DOC_TYPES[predicted[0].item()]
         doc_confidence = confidence[0].item()
         
-        # Extraction
+        # Extraction (model BIO tags)
         extraction_logits = outputs['extraction_logits']
         extraction_probs = torch.softmax(extraction_logits, dim=-1)
         extraction_confidence, extraction_predicted = torch.max(extraction_probs, dim=-1)
-        
-        entities = self.model._extract_entities(
+
+        raw_entities = self.model._extract_entities(
             tokens,
             extraction_predicted[0].cpu().numpy(),
             extraction_confidence[0].cpu().numpy(),
             attention_mask[0].cpu().numpy()
         )
-        
-        # Calculate overall confidence (weighted average)
-        # Classification has higher weight since it's more reliable
-        overall_confidence = (doc_confidence * 0.7) + (
-            float(np.mean([c for ents in entities.values() for _, _, c in ents])) * 0.3
-            if any(entities.values()) else 0.0
+
+        # Normalize model entities for merger
+        normalized_model = {
+            etype: [
+                {"text": txt, "confidence": float(conf)}
+                for (txt, _, conf) in ent_list
+            ]
+            for etype, ent_list in raw_entities.items() if ent_list
+        }
+
+        # Optional pattern/spaCy merge
+        if include_patterns:
+            merged_entities = extract_entities(text, normalized_model)
+        else:
+            merged_entities = normalized_model
+
+        # Optional summarization
+        if include_summary:
+            sum_key = f"sum::{hash(text)}"
+            if sum_key in self._summary_cache:
+                summary_block = self._summary_cache[sum_key]
+                self._summary_cache.move_to_end(sum_key)
+            else:
+                summary_block = summarize(text)
+                self._summary_cache[sum_key] = summary_block
+                if len(self._summary_cache) > self._cache_size:
+                    self._summary_cache.popitem(last=False)
+        else:
+            summary_block = {"text": "", "confidence": 0.0, "method": "none"}
+
+        # Overall confidence: blend classification, avg entity confidence, summary confidence (light weight)
+        entity_conf_values = [e.get("confidence", 0.0) for ents in merged_entities.values() for e in ents]
+        mean_entity_conf = float(np.mean(entity_conf_values)) if entity_conf_values else 0.0
+        overall_confidence = (
+            doc_confidence * 0.6 + mean_entity_conf * 0.3 + summary_block.get("confidence", 0.0) * 0.1
         )
         
         result = {
@@ -193,15 +247,16 @@ class DocumentProcessor:
                     for i in range(len(self.model.DOC_TYPES))
                 }
             },
-            'extraction': {
-                entity_type: [
-                    {'text': txt, 'confidence': float(conf)}
-                    for txt, _, conf in entity_list
-                ]
-                for entity_type, entity_list in entities.items()
-                if entity_list  # Only include non-empty
-            },
+            'extraction': merged_entities,
+            'summary': summary_block,
             'confidence': float(overall_confidence)
+        }
+        # Runtime metrics (simple)
+        result['metrics'] = {
+            'tokens': int(input_ids.shape[1]),
+            'device': self.device,
+            'cache_hit_tokenizer': cache_key in self._tok_cache,
+            'cache_hit_summary': include_summary and sum_key in getattr(self, '_summary_cache', {})
         }
         
         # Add embeddings if requested

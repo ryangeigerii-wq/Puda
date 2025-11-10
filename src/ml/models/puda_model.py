@@ -86,7 +86,8 @@ class PudaModel(nn.Module):
         use_bilstm: bool = True,
         lstm_hidden_size: int = 256,
         dropout: float = 0.1,
-        freeze_backbone: bool = False
+        freeze_backbone: bool = False,
+        layer_norm_head: bool = True
     ):
         """
         Initialize PudaModel.
@@ -138,19 +139,23 @@ class PudaModel(nn.Module):
         # Dropout
         self.dropout = nn.Dropout(dropout)
         
-        # Task 1: Document classification head
+        activation = nn.GELU()
+        norm_cls = nn.LayerNorm(classifier_input_size) if layer_norm_head else nn.Identity()
+        norm_ner = nn.LayerNorm(classifier_input_size) if layer_norm_head else nn.Identity()
+
+        # Task 1: Document classification head (optimized for CPU inference)
         self.classification_head = nn.Sequential(
+            norm_cls,
             nn.Linear(classifier_input_size, 256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
+            activation,
             nn.Linear(256, self.num_doc_types)
         )
         
         # Task 2: NER extraction head (token-level classification)
         self.extraction_head = nn.Sequential(
+            norm_ner,
             nn.Linear(classifier_input_size, 256),
-            nn.ReLU(),
-            nn.Dropout(dropout),
+            activation,
             nn.Linear(256, self.num_ner_tags)
         )
         
@@ -422,8 +427,34 @@ class PudaModel(nn.Module):
             'num_doc_types': self.num_doc_types,
             'num_ner_tags': self.num_ner_tags,
             'doc_types': self.DOC_TYPES,
-            'ner_tags': self.NER_TAGS
+            'ner_tags': self.NER_TAGS,
+            'optimized_heads': True
         }
+
+    # ---------------- CPU Optimization Helpers -----------------
+    def optimize_for_cpu(self) -> None:
+        """Apply dynamic quantization and set inference-friendly flags.
+
+        Safe to call multiple times. Only quantizes supported layers.
+        """
+        self.eval()
+        # Dynamic quantization for Linear layers (and LSTM if present)
+        modules = {nn.Linear}
+        if self.bilstm is not None:
+            modules.add(nn.LSTM)
+        try:
+            quantized = torch.quantization.quantize_dynamic(self, modules, dtype=torch.qint8)
+            # Replace in-place (PyTorch returns a new module tree)
+            for name, module in quantized.named_children():
+                setattr(self, name, module)
+            logger.info("Applied dynamic quantization for CPU inference")
+        except Exception as e:
+            logger.warning(f"CPU quantization skipped: {e}")
+        # Disable gradient computations globally for safety
+        for p in self.parameters():
+            p.requires_grad = False
+        torch.set_grad_enabled(False)
+
 
 
 def load_tokenizer(model_name: str = "distilbert-base-multilingual-cased"):

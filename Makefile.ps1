@@ -73,6 +73,16 @@ function Invoke-Install {
     pip install -r requirements.txt
 }
 
+function Invoke-ExportSmoke {
+    "Running ONNX export smoke test..."
+    $env:PYTHONPATH = $PWD
+    if (Test-Path ".venv") {
+        & .\.venv\Scripts\python.exe tests/test_export_smoke.py
+    } else {
+        python tests/test_export_smoke.py
+    }
+}
+
 function Invoke-Lint {
     "Running code linting..."
     docker-compose exec puda-app python -m pylint src/
@@ -119,6 +129,7 @@ function Show-Help {
     Write-Host ""
     Write-Host "  Development:" -ForegroundColor Yellow
     Write-Host "    Invoke-Install     - Install dependencies locally"
+    Write-Host "    Invoke-ExportSmoke - Run ONNX export smoke test"
     Write-Host "    Invoke-Lint        - Run linting"
     Write-Host "    Invoke-Format      - Format code"
     Write-Host ""
