@@ -83,6 +83,26 @@ function Invoke-ExportSmoke {
     }
 }
 
+function Invoke-MLApi {
+    "Starting ML API server..."
+    $env:PYTHONPATH = $PWD
+    if (Test-Path ".venv") {
+        & .\.venv\Scripts\python.exe src/inference/api.py
+    } else {
+        python src/inference/api.py
+    }
+}
+
+function Invoke-TestApi {
+    "Testing ML API endpoints..."
+    $env:PYTHONPATH = $PWD
+    if (Test-Path ".venv") {
+        & .\.venv\Scripts\python.exe tests/test_api.py
+    } else {
+        python tests/test_api.py
+    }
+}
+
 function Invoke-Lint {
     "Running code linting..."
     docker-compose exec puda-app python -m pylint src/
@@ -129,6 +149,8 @@ function Show-Help {
     Write-Host ""
     Write-Host "  Development:" -ForegroundColor Yellow
     Write-Host "    Invoke-Install     - Install dependencies locally"
+    Write-Host "    Invoke-MLApi       - Start ML API server"
+    Write-Host "    Invoke-TestApi     - Test ML API endpoints"
     Write-Host "    Invoke-ExportSmoke - Run ONNX export smoke test"
     Write-Host "    Invoke-Lint        - Run linting"
     Write-Host "    Invoke-Format      - Format code"
